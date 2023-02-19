@@ -8,6 +8,18 @@ The data provided by this application is not intended for medical use. Always co
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## Hardware
+There is a bunch of oximeters all running with the same firmware.
+This software is developed using a
+
+* [pulox by Viatom Checkme O2](https://www.pulox.de/pulox-by-Viatom-Checkme-O2-smartes-Handgelenk-Pulsoximeter-mit-Ringsensor)
+
+It may work but is not tested with:
+
+* [Viatom SleepU Pulse Oximeter](https://www.viatomtech.com/po3)
+
+and maybe others too
+
 ## Shorts
 * **HCI** is the [bluetooth host controller interface](https://en.wikipedia.org/wiki/List_of_Bluetooth_protocols#HCI) (hci) to be used (e.g. `hci0` or `hci1` ).
 * **HCI-MAC** is the [media access control address](https://en.wikipedia.org/wiki/MAC_address) (MAC) of the HCI (e.g. `D8:FC:93:12:34:56` ). It is used to identify the local interface uesed to connect to the remote sensor.
@@ -23,6 +35,11 @@ source ble_spo2/bin/activate
 pip3 install -r requirements.txt
 ```
 or just call `./setup.sh` .
+
+For using speech output as an action reaching limits, there needs to be a speech tool.
+On debian systems you can install `espeak`:
+* `sudo apt-get install espeak
+There are other option too, see Actions below.
 
 ## Using BLE with Ubuntu Linux
 Check if radio frequency (RF) devices are blocked
@@ -76,7 +93,7 @@ Get some information on your device:
 
 * `sudo hcitool -i hci1 leinfo DA:1C:F9:12:34:56`
 
-Devices that do support pairing
+Devices that do support pairing (not Pulox Checkme O2):
 
     bluetoothctl
     [bluetooth]# list
@@ -106,7 +123,8 @@ This is a bug in BlueZ that can be worked around by restarting the service:
 
 Getting
 * `g-io-error-quark: GDBus.Error:org.bluez.Error.Failed: Input/output error (36)`
-your SpO2 device is not initialized (see Using BLE with Ubuntu Linux)
+your SpO2 device is not initialized (see Using BLE with Ubuntu Linux) or blocked.
+To unblock do `rfkill unblock all`.
 
 ## Actions
 Any command for the underlying shell can be used for action to take place is threshold is reached.
@@ -123,6 +141,7 @@ A sample usage with english, german and spanish speach can be found in `spo2_mon
   * Pulse limit
   * Battery low
   * Connection lost
+* File download of logged data
 
 ## Sensor API
 For all BLE devices the 16 bit UUIDs are just a short for `0000xxxx-0000-1000-8000-00805F9B34FB`.
