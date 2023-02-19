@@ -3,11 +3,21 @@
 SPO2_LOW=89
 SPO2_HIGH=99
 
+# Check if virtual environment is available to use
+if [ -x ble_spo2/bin/activate ]; then
+    source ble_spo2/bin/activate
+fi
+
 # Check for MAC
 if [ -z "$O2_BLE_MAC" ]; then
-    echo "Do export your SpO2 sensor MAC using"
-    echo "export O2_BLE_MAC=DA:1C:F9:12:34:56"
-    exit
+    if [ -r ./my_o2.sh ]; then
+        source ./my_o2.sh
+    fi
+    if [ -z "$O2_BLE_MAC" ]; then
+        echo "Do export your SpO2 sensor MAC e.g. using"
+        echo "export O2_BLE_MAC=DA:1C:F9:12:34:56"
+        exit
+    fi
 fi
 
 # Check for language to use

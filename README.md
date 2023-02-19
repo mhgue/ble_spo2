@@ -3,7 +3,7 @@
 This python application can connect via BLE to a Pulox Checkme O2 to measure [blood oxygen saturation](https://en.wikipedia.org/wiki/Oxygen_saturation_(medicine)) (SpO2), [heard rate](https://en.wikipedia.org/wiki/Pulse) (rpm) and motion or count steps.
 Beside the original mobile app [ViHealth](https://play.google.com/store/apps/details?id=com.viatom.vihealth) this application provides the ability of realtime reaction to measured values reaching thresholds.
 
-## Note
+## Caution
 The data provided by this application is not intended for medical use. Always consult your doctor if you have any health problems.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
@@ -14,9 +14,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 * **DEV-MAC** is the BLE device media access control address (e.g. `DA:1C:F9:12:34:56` ). It is used to identify the SpO2 sensor to be used.
 
 ## Install
-
-t.b.c.
-
+You can install the requirements in your python3 installation using
+* `pip3 install -r requirements.txt`
+or you can create a virtual python environment to run this application in.
+```bash
+python3 -m venv ble_spo2
+source ble_spo2/bin/activate
+pip3 install -r requirements.txt
+```
+or just call `./setup.sh` .
 
 ## Using BLE with Ubuntu Linux
 Check if radio frequency (RF) devices are blocked
@@ -42,7 +48,7 @@ You should find your blood oxygen sensor like that
 
 Start bluetooth control, select your local hci to use, scan and **trust** your remote device.
 
-    sudo bluetoothctl
+    bluetoothctl
     [bluetooth]# list
     [bluetooth]# select HCI-MAC
     [bluetooth]# power on
@@ -98,6 +104,10 @@ This is a bug in BlueZ that can be worked around by restarting the service:
 * `sudo service bluetooth start`
 * `sudo service bluetooth status`
 
+Getting
+* `g-io-error-quark: GDBus.Error:org.bluez.Error.Failed: Input/output error (36)`
+your SpO2 device is not initialized (see Using BLE with Ubuntu Linux)
+
 ## Actions
 Any command for the underlying shell can be used for action to take place is threshold is reached.
 For example:
@@ -107,6 +117,12 @@ For example:
 Your can even let your phone ring using commands to access your router.
 
 A sample usage with english, german and spanish speach can be found in `spo2_monitor.sh`.
+
+## ToDo
+* Additional actions for
+  * Pulse limit
+  * Battery low
+  * Connection lost
 
 ## Sensor API
 For all BLE devices the 16 bit UUIDs are just a short for `0000xxxx-0000-1000-8000-00805F9B34FB`.
