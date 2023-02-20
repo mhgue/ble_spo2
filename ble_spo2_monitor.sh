@@ -2,6 +2,11 @@
 
 SPO2_LOW=89
 SPO2_HIGH=99
+HCI=hci0
+HCI_ID=$(rfkill list | grep $HCI | cut -d: -f1)
+
+# Enable HCI usage
+rfkill unblock $HCI_ID
 
 # Check if virtual environment is available to use
 if [ -x ble_spo2/bin/activate ]; then
@@ -21,20 +26,26 @@ if [ -z "$O2_BLE_MAC" ]; then
 fi
 
 # Check for language to use
-LANGUAGE=$(locale | grep LANGUAGE | cut -d= -f2 | cut -d_ -f1)
-SPEAK="espeak -v $LANGUAGE"
+if [ -z "$LANG" ]; then
+    LANG=$( locale | grep LANG= )
+    LANG=${LANG##*=}
+fi
+LA=${LANG%%_*}
+SPEAK="espeak -v $LA"
+export LANG_START=Start_monitoring
+export LANG_STOP=Stop_monitoring
+export LANG_HIGH=high_oxygen
+export LANG_LOW=low_oxygen
+export LANG_INACT=sensor_idle
+export LANG_OFF=sensor_off
 
 # Texts for different languages
 case $LANGUAGE in
 "en")
-    export LANG_START=Start_monitoring
-    export LANG_HIGH=high_oxygen
-    export LANG_LOW=low_oxygen
-    export LANG_INACT=sensor_idle
-    export LANG_OFF=sensor_off
     ;;
 "de")
     export LANG_START=Überwachung_starten
+    export LANG_STOP=Überwachung_stop
     export LANG_HIGH=viel_Sauerstoff
     export LANG_LOW=wenig_Sauerstoff
     export LANG_INACT=Sensor_inaktiv
@@ -42,20 +53,21 @@ case $LANGUAGE in
     ;;
 "es")
     export LANG_START=comenzar_a_monitorear
+    export LANG_STOP=parada_de_monitorear
     export LANG_HIGH=mucho_oxigeno
     export LANG_LOW=poco_oxigeno
     export LANG_INACT=sensor_inactivo
     export LANG_OFF=sensor_apagado
     ;;
 *)
-    echo "LANGUAGE $LANGUAGE not supported"
+    echo "LANGUAGE $LA not supported"
     exit
     ;;
 esac
 
 # Let monitoring run in infinite loop
 # to restart imediately if python throws an exception.
-while true; do
+while : ; do
     $SPEAK $LANG_START
     ./ble_spo2.py -i \
         --o2_max $SPO2_HIGH --o2_high_action "$SPEAK $LANG_HIGH" \
@@ -63,6 +75,11 @@ while true; do
         --sensor_idle_action "$SPEAK $LANG_INACT" \
         --sensor_off_action "$SPEAK $LANG_OFF" \
         $O2_BLE_MAC
+    if [ $? -eq 255 ]; then
+        break
+    fi
 done
+
+$SPEAK $LANG_STOP
 
 #EOF

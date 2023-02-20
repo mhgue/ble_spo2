@@ -1,12 +1,25 @@
 # Python application for use with a Pulox Checkme O2 BLE blood oxygen saturation sensor
 
-This python application can connect via BLE to a Pulox Checkme O2 to measure [blood oxygen saturation](https://en.wikipedia.org/wiki/Oxygen_saturation_(medicine)) (SpO2), [heard rate](https://en.wikipedia.org/wiki/Pulse) (rpm) and motion or count steps.
+This python application can connect via [D-Bus](https://en.wikipedia.org/wiki/D-Bus) and [BLE](https://en.wikipedia.org/wiki/Bluetooth_Low_Energy) to a Pulox Checkme O2 for measuring the [blood oxygen saturation](https://en.wikipedia.org/wiki/Oxygen_saturation_(medicine)) (SpO2), [heard rate](https://en.wikipedia.org/wiki/Pulse) (rpm) and motion or count of steps.
 Beside the original mobile app [ViHealth](https://play.google.com/store/apps/details?id=com.viatom.vihealth) this application provides the ability of realtime reaction to measured values reaching thresholds.
 
 ## Caution
 The data provided by this application is not intended for medical use. Always consult your doctor if you have any health problems.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Table of Contents
+- [Hardware](#Hardware)
+- [Shorts](#Shorts)
+- [Install](#Install)
+- [Using BLE with Ubuntu Linux](#Using-BLE-with-Ubuntu-Linux)
+  - [Others](#Others)
+  - [Trouble](#Trouble)
+- [Actions](#Actions)
+- [ToDo](#ToDo)
+- [Sensor API](#Sensor-API)
+- [References](#References)
+- [Using BLE with python](#Using-BLE-with-python)
 
 ## Hardware
 There is a bunch of oximeters all running with the same firmware.
@@ -96,12 +109,9 @@ Get some information on your device:
 Devices that do support pairing (not Pulox Checkme O2):
 
     bluetoothctl
-    [bluetooth]# list
-    [bluetooth]# select D8:FC:93:12:34:56
-    [bluetooth]# power on
     [bluetooth]# scan on
-    [bluetooth]# scan off
     [bluetooth]# pair DA:1C:F9:12:34:56
+    [bluetooth]# scan off
     [bluetooth]# paired-devices
     [bluetooth]# exit
 
@@ -144,13 +154,12 @@ A sample usage with english, german and spanish speach can be found in `spo2_mon
 * File download of logged data
 
 ## Sensor API
-For all BLE devices the 16 bit UUIDs are just a short for `0000xxxx-0000-1000-8000-00805F9B34FB`.
-
 These pulse oximeter are using a streaming packet protocol in a UART like manner.
 Therefor an RX and a TX UUID is used:
 * RX: 0734594a-a8e7-4b1a-a6b1-cd5243059a57
 * TX: 8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3
-[Lokking for these two UUIDs](https://www.google.com/search?q=0734594a-a8e7-4b1a-a6b1-cd5243059a57+8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3) will show you projects doing similar things.
+
+[Lokking for these two UUIDs](https://www.google.com/search?q=0734594a-a8e7-4b1a-a6b1-cd5243059a57+8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3) will show you projects using similar devices.
 
 The packet protocol is based on a one byte command and this looking at the different replies is interesting to find your specific devices capabilities. For my Pulox Checkme O2 these are:
 

@@ -8,13 +8,41 @@ import argparse
 import gi
 import copy
 import os
+import sys
 
+class ble_center(BLE_GATT.Central):
+    '''
+    BLE center with some extra methods
+    '''
+    def __init__(self, address):
+        BLE_GATT.Central.__init__(self,address)
+
+    # Convert a uuid to full size if needed
+    def uuid(self,u):
+        if isinstance(u,int):
+            return self.uuid(f'{u:04X}')
+        # For all BLE devices the 16 bit UUIDs are just a short for
+        elif isinstance(u,str) and len(u) == 4:
+            return f'0000{u}-0000-1000-8000-00805F9B34FB'
+        return u
+
+    def wait_for_notifications(self):
+        """
+        Has the effect of block the code from exiting. In the background it
+        starts an event loop to listen for updates from the device
+        """
+        try:
+            self.mainloop.run()
+        except KeyboardInterrupt as e:
+            self.cleanup()
+            raise(e)
 
 class pulox:
+    '''
+    Create a BLE device in central role and communicate with SpO2 sensor.
+    '''
     rx = '0734594a-a8e7-4b1a-a6b1-cd5243059a57'
     tx = '8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3'
-    # Manufacturer
-    c_manu = '00002a29-0000-1000-8000-00805f9b34fb'
     rx_buf = bytearray()
     verbose = 0
     last_payload = None
@@ -22,6 +50,25 @@ class pulox:
     def __init__(self, mac):
         self.set_verbose()
         self.ble_address = mac
+        self.ble = ble_center(self.ble_address)
+
+    def connect(self):
+        self.ble.connect()
+        # Listen for RX data
+        self.ble.on_value_change(self.rx, self.rx_notify)
+
+    def disconnect(self):
+        self.ble.disconnect()
+
+    # remove all notifications, exit the event loop, and disconnect from the peripheral device
+    def cleanup(self):
+        self.ble.cleanup()
+
+    def print_manufact(self):
+        # Read manufacturer
+        uuid = self.ble.uuid(0x2a29)
+        self.manufact = bytes(self.ble.char_read(uuid)).decode('UTF-8')
+        print(f"Manufacturer: {self.manufact}")
 
     def set_verbose(self, verbose=0):
         self.verbose = verbose
@@ -226,25 +273,8 @@ class pulox:
         if (0 < self.verbose) and (0 < self.wait_for):
             print(f"Wait for {self.wait_for} events")
         if (self.wait_for != 0):
+
             self.ble.wait_for_notifications()
-
-    def connect(self):
-        self.ble = BLE_GATT.Central(self.ble_address)
-        self.ble.connect()
-        # Listen for RX data
-        self.ble.on_value_change(self.rx, self.rx_notify)
-
-    def print_manufact(self):
-        # Read manufacturer
-        self.manufact = bytes(self.ble.char_read(self.c_manu)).decode('UTF-8')
-        print(f"Manufacturer: {self.manufact}")
-
-    def disconnect(self):
-        self.ble.disconnect()
-
-    # remove all notifications, exit the event loop, and disconnect from the peripheral device
-    def cleanup(self):
-        self.ble.cleanup()
 
 
 class cmd_line:
@@ -338,11 +368,15 @@ if __name__ == '__main__':
             pc02.tx_request_info()
             pc02.wait_for_notifications(cmd.get_num_events())
         pc02.disconnect()
+        print('Done')
     except gi.repository.GLib.GError as e:
-        print(e)
+        print(f'GErr: {e}')
     except KeyboardInterrupt as e:
-        print(e)
+        print(f'Stop {e}')
+        sys.exit(-1)
     except KeyError as e:
-        print(e)
+        print(f'KeyErr: {e}')
+    except Exception as e:
+        print(f'Ex: {e}')
 
 # EOF
