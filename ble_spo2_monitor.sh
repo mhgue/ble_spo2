@@ -68,7 +68,8 @@ esac
 # Let monitoring run in infinite loop
 # to restart imediately if python throws an exception.
 $SPEAK $LANG_START
-./ble_spo2.py -L ./spo2_$(date +%d.%m.%y_%H:%M:%S).csv \
+CSV=./spo2_$(date +%d.%m.%y_%H:%M:%S).csv
+./ble_spo2.py -L $CSV \
     --o2_max $SPO2_HIGH --o2_high_action "$SPEAK $LANG_HIGH" \
     --o2_min $SPO2_LOW --o2_low_action "$SPEAK $LANG_LOW" \
     --sensor_idle_action "$SPEAK $LANG_INACT" \
@@ -76,5 +77,7 @@ $SPEAK $LANG_START
     $O2_BLE_MAC
 echo "Exit $?"
 $SPEAK $LANG_STOP
+
+./plot_csv.sh $CSV
 
 #EOF
