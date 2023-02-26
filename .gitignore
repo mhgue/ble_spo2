@@ -3,3 +3,4 @@ __pycache__/
 *~
 my_*
 ble_spo2/
+*.csv

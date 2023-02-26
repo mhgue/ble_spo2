@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 # Read Pulox Checkme O2
 #
+# see https://doc.qt.io/qtforpython/examples/example_async__minimal.html
+#
 
 import BLE_GATT
+import gi
 import json
 import argparse
-import gi
 import copy
 import os
 import sys
+import signal
+import time
 
 class ble_center(BLE_GATT.Central):
     '''
@@ -16,6 +20,11 @@ class ble_center(BLE_GATT.Central):
     '''
     def __init__(self, address):
         BLE_GATT.Central.__init__(self,address)
+        signal.signal(signal.SIGTERM, self.signal_hdl)
+
+    def signal_hdl(self, signum, frame):
+        print("Signal:", signum, frame)
+        self.mainloop.quit()
 
     # Convert a uuid to full size if needed
     def uuid(self,u):
@@ -46,16 +55,30 @@ class pulox:
     rx_buf = bytearray()
     verbose = 0
     last_payload = None
+    is_connected = False
 
     def __init__(self, mac):
         self.set_verbose()
+        self.set_log_file_name()
+        self.info_requested = False
         self.ble_address = mac
         self.ble = ble_center(self.ble_address)
+        self.payload_time = time.time()
 
     def connect(self):
-        self.ble.connect()
+        self.is_connected = False
+        try:
+            self.ble.connect()
+        except gi.repository.GLib.GError as e:
+            if e.matches(gi.repository.Gio.io_error_quark(), gi.repository.Gio.IOErrorEnum.DBUS_ERROR):
+                return False
+            else:
+                print(f'Connect failed: {e}')
+                sys.exit(1)
+        self.is_connected = True
         # Listen for RX data
         self.ble.on_value_change(self.rx, self.rx_notify)
+        return self.is_connected
 
     def disconnect(self):
         self.ble.disconnect()
@@ -63,6 +86,9 @@ class pulox:
     # remove all notifications, exit the event loop, and disconnect from the peripheral device
     def cleanup(self):
         self.ble.cleanup()
+        if (self.log_file):
+            self.log_file.close()
+            self.log_file = None
 
     def print_manufact(self):
         # Read manufacturer
@@ -72,6 +98,13 @@ class pulox:
 
     def set_verbose(self, verbose=0):
         self.verbose = verbose
+
+    def set_log_file_name(self, log_file_name = None):
+        self.log_file_name = log_file_name
+        self.log_file = None
+        if (self.log_file_name):
+            self.log_file = open(self.log_file_name,'w')
+            print( 'Time; Epoch; SpO2; Puls; Batt; Count; Moves', file=self.log_file)
 
     def set_o2_low_action(self, cmd, limit):
         self.o2_low_action = cmd
@@ -130,7 +163,7 @@ class pulox:
 
     # Send command
     def tx_cmd(self, cmd, blk_id=0, payload=bytearray()):
-        if 0 < self.verbose:
+        if 1 < self.verbose:
             print(f'TX: cmd {cmd:02x}')
         pkt = self.command(cmd, blk_id, payload)
         self.ble.char_write(self.tx, pkt)
@@ -140,6 +173,7 @@ class pulox:
 
     def tx_request_info(self):
         self.tx_cmd(0x14)
+        self.info_requested = True
 
     def tx_file_open(self, filename):
         self.tx_cmd(0x03, 0, bytearray(filename).append(0))
@@ -165,21 +199,30 @@ class pulox:
         batt = payload[7]
         rd1 = payload[8]
         moves = payload[9]
+        str_spo2 = f' {spo2} % '
+        str_rpm = f'{rpm} rpm'
         if flag == 0xFF:
             self.do_action(self.sensor_off_action)
-            print(
-                f'SpO2  off, RPM  off, Batt {batt}%, Count {step_cnt}, Moves {moves}, ? {rd1}  ({payload.hex()})')
+            str_spo2 = str_rpm = '  off '
         elif flag == 0x00 and spo2 == 0x00 and rpm == 0x00:
             self.do_action(self.sensor_idle_action)
-            print(
-                f'SpO2 idle, RPM idle, Batt {batt}%, Count {step_cnt}, Moves {moves}, ? {rd1}  ({payload.hex()})')
+            str_spo2 = str_rpm = ' idle '
         else:
             if self.o2_low_action_limit and self.o2_low_action_limit >= spo2:
                 self.do_action(self.o2_low_action)
             if self.o2_high_action_limit and self.o2_high_action_limit <= spo2:
                 self.do_action(self.o2_high_action)
+        ts=time.strftime('%H:%M:%S')
+        ep=time.strftime('%s')
+        if (0 < self.verbose):
             print(
-                f'SpO2 {spo2} %, RPM   {rpm}, Batt {batt}%, Count {step_cnt}, moves {moves}, ? {rd1}  ({payload.hex()})')
+                f'SpO2 {str_spo2}, Puls {str_rpm}, Batt {batt} %, Count {step_cnt}, Moves {moves}, ? {rd1}  ({payload.hex()})')
+        else:
+            print(
+                f'{ts} SpO2 {str_spo2}, Puls {str_rpm}, Batt {batt} %, Count {step_cnt}, Moves {moves}')
+        if (self.log_file):
+            print( f'{ts}; {ep}; {str_spo2}; {str_rpm}; {batt}; {step_cnt}; {moves}', file=self.log_file )
+            self.log_file.flush()
         return True
 
     def rx_json_payload(self, payload):
@@ -196,6 +239,7 @@ class pulox:
             print(f'No JSON data: {jstr}')
             return False
         print(json.dumps(self.json_info, sort_keys=True, indent=4))
+        self.info_requested = False
         return True
 
     def rx_payload(self, cmd, payload):
@@ -212,7 +256,8 @@ class pulox:
                     print(f'unkonwn error 0x{payvalue:X}')
                 return True
         if cmd == 0x00:
-            if payload != self.last_payload:
+            if (payload != self.last_payload) or ((time.time() - self.payload_time) > 3):
+                self.payload_time = time.time()
                 self.last_payload = copy.deepcopy(payload)
                 if pay_len == 0x0200:  # JSON device info
                     return self.rx_json_payload(payload)
@@ -224,7 +269,6 @@ class pulox:
 
     def rx_pkt(self):
         while (len(self.rx_buf) > 0) and (self.rx_buf[0] != 0x55):
-            print(f'rx skip 0x{self.rx_buf[0]:X} {self.rx_buf.hex()}')
             self.rx_buf = self.rx_buf[1:]
         if len(self.rx_buf) < 8:
             return
@@ -246,6 +290,9 @@ class pulox:
         if len(self.rx_buf) != (pay_len + 8):
             print('RX wrong packet len %d with payload %d' %
                   (len(self.rx_buf), pay_len))
+            # Packet lost and request pending?
+            if (self.info_requested):
+                self.tx_request_info()
         if (pay_len > 0):
             payload = self.rx_buf[7:7+pay_len]
             self.rx_buf = bytearray()
@@ -305,6 +352,8 @@ class cmd_line:
             '-x', '--o2_low_action', type=str, default=None)
         self.parser.add_argument(
             '-X', '--o2_high_action', type=str, default=None)
+        self.parser.add_argument(
+            '-L', '--log', type=str, default=None)
         self.parser.add_argument('-v', '--verbose', action='count')
         self.args = self.parser.parse_args()
 
@@ -313,6 +362,9 @@ class cmd_line:
 
     def is_info(self):
         return self.args.info
+
+    def do_gui(self):
+        return self.args.gui
 
     def show_manufact(self):
         return self.args.manufact
@@ -347,36 +399,50 @@ class cmd_line:
     def get_pulse_max(self):
         return self.args.pulse_max
 
+    def get_log_file_name(self):
+        return self.args.log
+
 
 if __name__ == '__main__':
-    try:
-        cmd = cmd_line()
-        # Connect to device with given MAC
-        pc02 = pulox(cmd.get_mac())
-        if cmd.get_verbose():
-            pc02.set_verbose(cmd.get_verbose())
-        pc02.set_o2_low_action(cmd.get_o2_low_action(), cmd.get_o2_min())
-        pc02.set_o2_high_action(cmd.get_o2_high_action(), cmd.get_o2_max())
-        pc02.set_sensor_off_action(cmd.get_sensor_off_action())
-        pc02.set_sensor_idle_action(cmd.get_sensor_idle_action())
-        pc02.connect()
-        # Request manufacturer
-        if cmd.show_manufact():
-            pc02.print_manufact()
-        # Request device info
-        if cmd.is_info():
-            pc02.tx_request_info()
-            pc02.wait_for_notifications(cmd.get_num_events())
-        pc02.disconnect()
-        print('Done')
-    except gi.repository.GLib.GError as e:
-        print(f'GErr: {e}')
-    except KeyboardInterrupt as e:
-        print(f'Stop {e}')
-        sys.exit(-1)
-    except KeyError as e:
-        print(f'KeyErr: {e}')
-    except Exception as e:
-        print(f'Ex: {e}')
+    while True:
+        try:
+            cmd = cmd_line()
+            # Connect to device with given MAC
+            pc02 = pulox(cmd.get_mac())
+            if cmd.get_verbose():
+                pc02.set_verbose(cmd.get_verbose())
+            if cmd.get_log_file_name():
+                pc02.set_log_file_name(cmd.get_log_file_name())
+            pc02.set_o2_low_action(cmd.get_o2_low_action(), cmd.get_o2_min())
+            pc02.set_o2_high_action(cmd.get_o2_high_action(), cmd.get_o2_max())
+            pc02.set_sensor_off_action(cmd.get_sensor_off_action())
+            pc02.set_sensor_idle_action(cmd.get_sensor_idle_action())
+            while not pc02.connect():
+                print("Wait")
+                time.sleep(2)
+            # Request manufacturer
+            if cmd.show_manufact():
+                pc02.print_manufact()
+            # Request device info
+            if cmd.is_info():
+                pc02.tx_request_info()
+                pc02.wait_for_notifications(cmd.get_num_events())
+            elif cmd.get_num_events() != 0:
+                pc02.tx_request_io()
+                pc02.wait_for_notifications(cmd.get_num_events())
+            pc02.cleanup()
+            print('Done')
+            sys.exit(0)
+        except KeyboardInterrupt as e:
+            print(f'Stop {e}')
+            sys.exit(-1)
+        except gi.repository.GLib.GError as e:
+            if e.matches(gi.repository.Gio.io_error_quark(), gi.repository.GLib.DBus.Error.NoReply):
+                print(f'Disconnected')
+            print(f'GErr: {e}')
+        except KeyError as e:
+            print(f'KeyErr: {e}')
+        except Exception as e:
+            print(f'Ex: {e}')
 
 # EOF
